@@ -1,11 +1,11 @@
 [project]
 name = "sec-filings-agent"
 version = "0.1.0"
-description = "Replace with a one-line project description."
+description = "LangGraph agent that compares the Item 1A Risk Factors section of two 10-Ks and lists what changed, each change citing a passage that must appear literally in the source text."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-authors = [{ name = "YOUR_NAME" }]
+authors = [{ name = "Davi Liberato" }]
 dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
