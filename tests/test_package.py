@@ -1,9 +1,9 @@
 import pytest
 
-from agente_filings_sec.config import Settings
+from sec_filings_agent.config import Settings
 
 
 def test_reads_settings_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENTE_FILINGS_SEC_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("SEC_FILINGS_AGENT_LOG_LEVEL", "DEBUG")
 
     assert Settings().log_level == "DEBUG"

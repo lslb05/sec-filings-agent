@@ -1,151 +1,154 @@
-# agente-filings-sec
+# sec-filings-agent
 
-Agente LangGraph que compara o "Item 1A Risk Factors" de dois 10-Ks da mesma
-empresa e lista o que mudou — cada mudança citando um trecho que precisa
-aparecer, literalmente, no texto de origem.
+LangGraph agent that compares the "Item 1A Risk Factors" section of two
+10-Ks from the same company and lists what changed — each change citing a
+passage that must appear, literally, in the source text.
 
-## O problema
+## The problem
 
-Comparar como o risk factors de uma empresa mudou de um 10-K pro outro é
-trabalho manual de analista: ler duas seções longas e achar o que é novo,
-removido ou alterado. Um agente que faz isso rápido não vale nada se
-inventar mudança que não está no texto — então a citação de cada mudança é
-conferida por correspondência literal contra o filing de origem antes de
-sair na resposta final. Não existe "gabarito público" pra RAG sobre filing;
-o grounding É a validação.
+Comparing how a company's risk factors changed from one 10-K to the next is
+manual analyst work: reading two long sections and finding what's new,
+removed, or altered. An agent that does this fast is worthless if it
+invents a change that isn't in the text — so each change's citation is
+checked by literal match against the source filing before it makes it into
+the final response. There's no "public ground truth" for RAG over filings;
+the grounding IS the validation.
 
-## Resultado
+## Result
 
 ```console
-$ uv run python -m agente_filings_sec comparar --ticker AAPL --ano-antigo 2023 --ano-novo 2024
-tipo,filing,resumo,citacao
+$ uv run python -m sec_filings_agent compare --ticker AAPL --old-year 2023 --new-year 2024
+type,filing,summary,citation
 ...
 ```
 
-Não rodei esse comando de ponta a ponta com uma chave de verdade — este
-ambiente de desenvolvimento não tem `ANTHROPIC_API_KEY` nem `OPENAI_API_KEY`
-(ver Limitações). O que **foi** validado com dado real: busca no EDGAR e
-extração do Item 1A contra 10-Ks de verdade da Apple, Microsoft e Tesla — as
-três formatações diferentes de HTML quebraram a heurística de extração em
-algum momento do desenvolvimento, e as correções ficaram documentadas em
-`docs/decisions.md` porque valem a pena entender, não só corrigir.
+I haven't run this command end to end with a real key — this development
+environment has neither `ANTHROPIC_API_KEY` nor `OPENAI_API_KEY` (see
+Limitations). What **was** validated with real data: EDGAR search and Item
+1A extraction against real 10-Ks from Apple, Microsoft, and Tesla — the
+three different HTML formats broke the extraction heuristic at some point
+during development, and the fixes are documented in `docs/decisions.md`
+because they're worth understanding, not just fixing.
 
-## Problema e escopo
+## Problem and scope
 
-- **Usuário:** eu, e quem revisa o portfólio avaliando fluência com
-  LLM/LangGraph.
-- **Decisão:** lista de mudanças (novo/removido/alterado) entre o Item 1A de
-  dois 10-Ks, cada uma com citação verificada contra o texto fonte.
-- **Entrada:** SEC EDGAR — `data.sec.gov/submissions` e
-  `www.sec.gov/files/company_tickers.json` (mapa ticker→CIK) e
-  `sec.gov/Archives` (documento). Sem credencial, só `User-Agent` descritivo.
-- **Fora de escopo:** mais de 2 filings por vez, seção além do Item 1A,
-  vetorização/embedding, UI, observabilidade de custo de LLM em produção.
+- **User:** me, and whoever reviews the portfolio evaluating LLM/LangGraph
+  fluency.
+- **Decision:** a list of changes (added/removed/changed) between the Item
+  1A of two 10-Ks, each one with a citation verified against the source
+  text.
+- **Input:** SEC EDGAR — `data.sec.gov/submissions` and
+  `www.sec.gov/files/company_tickers.json` (ticker→CIK map) and
+  `sec.gov/Archives` (the document). No credentials, just a descriptive
+  `User-Agent`.
+- **Out of scope:** more than 2 filings at a time, sections beyond Item 1A,
+  vectorization/embeddings, a UI, production LLM cost observability.
 
-## Arquitetura
+## Architecture
 
 ```
                     ┌─────────────────────┐
-                    │ buscar_filing_antigo│
+                    │  fetch_old_filing   │
                     └──────────┬───────────┘
                                ▼
                     ┌─────────────────────┐
-                    │ buscar_filing_novo  │
+                    │  fetch_new_filing   │
                     └──────────┬───────────┘
                                ▼
                     ┌─────────────────────┐
-              ┌────▶│      comparar       │  chama o LLM (tool-calling)
+              ┌────▶│      compare        │  calls the LLM (tool-calling)
               │     └──────────┬───────────┘
               │                ▼
               │     ┌─────────────────────┐
-              │     │ verificar_citacoes  │  determinístico, sem LLM
+              │     │  verify_citations   │  deterministic, no LLM
               │     └──────────┬───────────┘
               │                ▼
-      citação inválida    citação válida
-      e tentativa < 3          │
-              └────────────────┴──▶ fim
+      invalid citation     valid citation
+      and attempt < 3          │
+              └────────────────┴──▶ done
 ```
 
-Três decisões que valem explicação:
+Three decisions worth explaining:
 
-**Tool-calling em vez de JSON em texto livre.** Tanto a Anthropic quanto a
-OpenAI validam a forma da resposta contra um schema antes de devolver — não
-sobra "o modelo esqueceu uma vírgula" pra tratar aqui. O conteúdo ainda é
-revalidado por Pydantic, porque vir estruturado da API não dispensa validar
-numa fronteira externa.
+**Tool-calling instead of free-text JSON.** Both Anthropic and OpenAI
+validate the response's shape against a schema before returning it — there's
+no "the model forgot a comma" left to handle here. The content is still
+revalidated by Pydantic, because coming structured from the API doesn't
+excuse validating at an external boundary.
 
-**Provedor de LLM é escolha de configuração, não de código.** `ClienteLLM` é
-um `Protocol` com um único método (`comparar`); `ClienteAnthropic` e
-`ClienteOpenAI` implementam o mesmo contrato contra APIs de tool-calling
-diferentes, e `construir_cliente()` escolhe qual instanciar a partir de
-`AGENTE_FILINGS_SEC_PROVEDOR_LLM`. `grafo.py` e `cli.py` só conhecem o
-`Protocol` — trocar de provedor não muda uma linha deles.
+**LLM provider is a configuration choice, not a code choice.** `LLMClient`
+is a `Protocol` with a single method (`compare`); `AnthropicClient` and
+`OpenAIClient` implement the same contract against different tool-calling
+APIs, and `build_client()` picks which to instantiate from
+`SEC_FILINGS_AGENT_LLM_PROVIDER`. `graph.py` and `cli.py` only know the
+`Protocol` — swapping providers doesn't change a line of either.
 
-**A aresta condicional é o que separa isto de uma função com um `if`.**
-`verificar_citacoes` não chama o LLM — é substring determinística. Se uma
-citação não bate no texto de origem, o grafo volta pro nó `comparar` com o
-feedback específico do que falhou, até 3 tentativas. Testado de verdade
-(`tests/test_grafo.py`): um LLM falso que erra na primeira tentativa e
-acerta na segunda, provando que o loop e o feedback funcionam.
+**The conditional edge is what separates this from a function with an
+`if`.** `verify_citations` doesn't call the LLM — it's deterministic
+substring matching. If a citation doesn't match the source text, the graph
+goes back to the `compare` node with specific feedback about what failed, up
+to 3 attempts. Actually tested (`tests/test_graph.py`): a fake LLM that gets
+it wrong on the first attempt and right on the second, proving the loop and
+the feedback work.
 
-**A extração do Item 1A precisou de duas correções depois do design
-inicial** — ver a próxima seção e `docs/decisions.md`. Isso não é um detalhe
-de rodapé: é o risco técnico real deste projeto, mais do que o LLM em si.
+**Item 1A extraction needed two fixes after the initial design** — see the
+next section and `docs/decisions.md`. That's not a footnote: it's this
+project's real technical risk, more than the LLM itself.
 
-## Executar localmente
+## Run locally
 
-Requisitos: Python 3.12, `uv`, e uma chave da Anthropic **ou** da OpenAI.
+Requirements: Python 3.12, `uv`, and an Anthropic **or** OpenAI key.
 
 ```bash
 uv sync
-cp .env.example .env      # preencha a chave do provedor escolhido
-uv run python -m agente_filings_sec comparar --ticker AAPL --ano-antigo 2023 --ano-novo 2024
+cp .env.example .env      # fill in the chosen provider's key
+uv run python -m sec_filings_agent compare --ticker AAPL --old-year 2023 --new-year 2024
 ```
 
-`AGENTE_FILINGS_SEC_PROVEDOR_LLM` escolhe o provedor (`anthropic`, padrão, ou
-`openai`) — só a chave desse provedor precisa estar preenchida no `.env`.
-Sem ela, o comando orienta e sai com código 2. Se o filing não for encontrado
-ou a extração do Item 1A falhar, sai com código 2 também, com a mensagem
-específica — nunca inventa resposta.
+`SEC_FILINGS_AGENT_LLM_PROVIDER` picks the provider (`anthropic`, default,
+or `openai`) — only that provider's key needs to be filled in `.env`.
+Without it, the command explains why and exits with code 2. If the filing
+isn't found or Item 1A extraction fails, it also exits with code 2, with a
+specific message — it never invents an answer.
 
-## Qualidade
+## Quality
 
 ```bash
 uv run python scripts/check.py
 ```
 
-O check executa formatação, lint, tipos e testes com cobertura. Nenhum teste
-chama a API da Anthropic, da OpenAI nem a SEC de verdade — o cliente LLM e o
-cliente HTTP são injetados, e os testes usam versões falsas/mockadas.
+The check runs format, lint, types and tests with coverage. No test calls
+the real Anthropic API, the OpenAI API, or the SEC — the LLM client and the
+HTTP client are injected, and tests use fake/mocked versions.
 
-## Estrutura
+## Structure
 
 ```text
-src/agente_filings_sec/
-    fontes/edgar.py    ticker→CIK, lista de filings, download — sem credencial
-    extrator.py         heurística de extração do Item 1A (o risco técnico real)
-    citacoes.py          verificação determinística de citação
-    llm.py                clientes Anthropic e OpenAI via tool-calling, interface injetável
-    grafo.py              o grafo LangGraph: busca, compara, verifica, repete
-    cli.py                 coordenação
+src/sec_filings_agent/
+    sources/edgar.py    ticker→CIK, filing list, download — no credentials
+    extractor.py          Item 1A extraction heuristic (the real technical risk)
+    citations.py           deterministic citation verification
+    llm.py                  Anthropic and OpenAI clients via tool-calling, injectable interface
+    graph.py                the LangGraph graph: fetch, compare, verify, retry
+    cli.py                   coordination
 ```
 
-## Limitações
+## Limitations
 
-- **Nunca validado contra a API da Anthropic nem da OpenAI de verdade.**
-  Este ambiente de desenvolvimento não tem `ANTHROPIC_API_KEY` nem
-  `OPENAI_API_KEY`. `fontes/edgar.py` e `extrator.py` foram validados contra
-  filings reais (AAPL, MSFT, TSLA); o nó `comparar` e o loop de re-tentativa
-  só foram testados com um LLM falso determinístico.
-- A heurística de extração do Item 1A foi corrigida duas vezes durante o
-  desenvolvimento contra três formatos reais diferentes — não há garantia de
-  que generaliza para todo filer. Um 10-K com formatação atípica pode
-  quebrá-la de novo; o comportamento nesse caso é falhar com
-  `SecaoNaoEncontrada`, não devolver texto errado.
-- Limite de 3 tentativas de correção de citação; se todas falharem, a saída
-  sai com um aviso e as mudanças não verificadas continuam na lista — o
-  chamador decide se confia nelas.
+- **Never validated against the real Anthropic or OpenAI API.** This
+  development environment has neither `ANTHROPIC_API_KEY` nor
+  `OPENAI_API_KEY`. `sources/edgar.py` and `extractor.py` were validated
+  against real filings (AAPL, MSFT, TSLA); the `compare` node and the retry
+  loop were only tested with a deterministic fake LLM.
+- The Item 1A extraction heuristic was fixed twice during development
+  against three different real-world formats — there's no guarantee it
+  generalizes to every filer. A 10-K with atypical formatting could break it
+  again; the behavior in that case is to fail with `SectionNotFound`, not
+  return the wrong text.
+- A 3-attempt limit for citation correction; if all fail, the output prints
+  a warning and the unverified changes stay in the list — the caller
+  decides whether to trust them.
 
-## Licença
+## License
 
-MIT. Dados de terceiros mantêm suas próprias licenças e termos de uso.
+MIT. Third-party data keeps its own license and terms of use.

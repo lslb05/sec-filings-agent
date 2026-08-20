@@ -1,78 +1,78 @@
 import pytest
 
-from agente_filings_sec.llm import (
-    ClienteAnthropic,
-    ClienteOpenAI,
-    MudancaBruta,
-    _montar_prompt,
-    construir_cliente,
+from sec_filings_agent.llm import (
+    AnthropicClient,
+    OpenAIClient,
+    RawChange,
+    _build_prompt,
+    build_client,
 )
 
 
-def test_prompt_inclui_os_dois_textos() -> None:
-    prompt = _montar_prompt("texto do filing antigo", "texto do filing novo", [])
+def test_prompt_includes_both_texts() -> None:
+    prompt = _build_prompt("old filing text", "new filing text", [])
 
-    assert "texto do filing antigo" in prompt
-    assert "texto do filing novo" in prompt
-    assert "tentativa anterior" not in prompt
-
-
-def test_prompt_com_feedback_inclui_as_citacoes_que_falharam() -> None:
-    prompt = _montar_prompt("antigo", "novo", ["citação que não bateu"])
-
-    assert "citação que não bateu" in prompt
-    assert "tentativa anterior" in prompt
+    assert "old filing text" in prompt
+    assert "new filing text" in prompt
+    assert "previous attempt" not in prompt
 
 
-def test_mudanca_bruta_valida_os_campos_esperados() -> None:
-    mudanca = MudancaBruta(
-        tipo="alterado",
-        resumo="mudou o limite de exposição",
-        citacao="trecho",
-        filing="antigo",
+def test_prompt_with_feedback_includes_the_failed_citations() -> None:
+    prompt = _build_prompt("old", "new", ["citation that didn't match"])
+
+    assert "citation that didn't match" in prompt
+    assert "previous attempt" in prompt
+
+
+def test_raw_change_validates_expected_fields() -> None:
+    change = RawChange(
+        type="changed",
+        summary="the exposure limit changed",
+        citation="passage",
+        filing="old",
     )
 
-    assert mudanca.tipo == "alterado"
-    assert mudanca.filing == "antigo"
+    assert change.type == "changed"
+    assert change.filing == "old"
 
 
-def test_construir_cliente_anthropic_sem_chave_levanta() -> None:
+def test_build_client_anthropic_without_key_raises() -> None:
     with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
-        construir_cliente(
-            provedor="anthropic",
+        build_client(
+            provider="anthropic",
             anthropic_api_key=None,
-            anthropic_modelo=None,
-            openai_api_key="chave-openai",
-            openai_modelo=None,
+            anthropic_model=None,
+            openai_api_key="openai-key",
+            openai_model=None,
         )
 
 
-def test_construir_cliente_openai_sem_chave_levanta() -> None:
+def test_build_client_openai_without_key_raises() -> None:
     with pytest.raises(ValueError, match="OPENAI_API_KEY"):
-        construir_cliente(
-            provedor="openai",
-            anthropic_api_key="chave-anthropic",
-            anthropic_modelo=None,
+        build_client(
+            provider="openai",
+            anthropic_api_key="anthropic-key",
+            anthropic_model=None,
             openai_api_key=None,
-            openai_modelo=None,
+            openai_model=None,
         )
 
 
-def test_construir_cliente_escolhe_a_classe_do_provedor() -> None:
-    anthropic_cliente = construir_cliente(
-        provedor="anthropic",
-        anthropic_api_key="chave",
-        anthropic_modelo=None,
+def test_build_client_picks_the_provider_class() -> None:
+    anthropic_client = build_client(
+        provider="anthropic",
+        anthropic_api_key="key",
+        anthropic_model=None,
         openai_api_key=None,
-        openai_modelo=None,
+        openai_model=None,
     )
-    openai_cliente = construir_cliente(
-        provedor="openai",
+    openai_client = build_client(
+        provider="openai",
         anthropic_api_key=None,
-        anthropic_modelo=None,
-        openai_api_key="chave",
-        openai_modelo="gpt-5.4-mini",
+        anthropic_model=None,
+        openai_api_key="key",
+        openai_model="gpt-5.4-mini",
     )
 
-    assert isinstance(anthropic_cliente, ClienteAnthropic)
-    assert isinstance(openai_cliente, ClienteOpenAI)
+    assert isinstance(anthropic_client, AnthropicClient)
+    assert isinstance(openai_client, OpenAIClient)

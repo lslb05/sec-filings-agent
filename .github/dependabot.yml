@@ -1,8 +1,8 @@
 version: 2
 updates:
-  # Ecossistema uv, nao pip: o uv le pyproject.toml e uv.lock e atualiza os
-  # dois no mesmo PR. Com pip o lock ficava para tras e o "uv sync --locked"
-  # do CI falhava em todo bump.
+  # uv ecosystem, not pip: uv reads pyproject.toml and uv.lock and updates
+  # both in the same PR. With pip the lock fell behind and CI's
+  # "uv sync --locked" failed on every bump.
   - package-ecosystem: uv
     directory: /
     schedule:

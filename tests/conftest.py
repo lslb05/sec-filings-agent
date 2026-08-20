@@ -3,20 +3,20 @@ from collections.abc import Callable
 import httpx
 import pytest
 
-CriaClienteMock = Callable[[dict[str, httpx.Response]], httpx.Client]
+MakeMockClient = Callable[[dict[str, httpx.Response]], httpx.Client]
 
 
 @pytest.fixture
-def criar_cliente_mock() -> CriaClienteMock:
-    """Cliente httpx cujas respostas são escolhidas pela URL exata pedida."""
+def make_mock_client() -> MakeMockClient:
+    """An httpx client whose responses are picked by the exact URL requested."""
 
-    def criar(respostas: dict[str, httpx.Response]) -> httpx.Client:
-        def responder(requisicao: httpx.Request) -> httpx.Response:
-            url = str(requisicao.url)
-            if url not in respostas:
-                raise AssertionError(f"URL não mockada: {url}")
-            return respostas[url]
+    def make(responses: dict[str, httpx.Response]) -> httpx.Client:
+        def respond(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url not in responses:
+                raise AssertionError(f"URL not mocked: {url}")
+            return responses[url]
 
-        return httpx.Client(transport=httpx.MockTransport(responder))
+        return httpx.Client(transport=httpx.MockTransport(respond))
 
-    return criar
+    return make

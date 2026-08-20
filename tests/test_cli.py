@@ -3,48 +3,48 @@ import json
 import httpx
 import pytest
 
-from agente_filings_sec.cli import main
-from agente_filings_sec.llm import MudancaBruta
+from sec_filings_agent.cli import main
+from sec_filings_agent.llm import RawChange
 
-_MAPA_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
-_SUBMISSOES_URL = "https://data.sec.gov/submissions/CIK0000320193.json"
-_ACCESSION_ANTIGO = "0000000000-00-000000"
-_ACCESSION_NOVO = "0000000000-00-000001"
-_DOC_ANTIGO_URL = (
+_TICKER_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
+_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0000320193.json"
+_ACCESSION_OLD = "0000000000-00-000000"
+_ACCESSION_NEW = "0000000000-00-000001"
+_DOC_OLD_URL = (
     f"https://www.sec.gov/Archives/edgar/data/320193/"
-    f"{_ACCESSION_ANTIGO.replace('-', '')}/antigo.htm"
+    f"{_ACCESSION_OLD.replace('-', '')}/old.htm"
 )
-_DOC_NOVO_URL = (
+_DOC_NEW_URL = (
     f"https://www.sec.gov/Archives/edgar/data/320193/"
-    f"{_ACCESSION_NOVO.replace('-', '')}/novo.htm"
+    f"{_ACCESSION_NEW.replace('-', '')}/new.htm"
 )
 
-_TEXTO = "Risco de mercado pode afetar nossos resultados. " * 20
+_TEXT = "Market risk may affect our results. " * 20
 
 
-def _html_filing() -> str:
-    return f"<html><body>Item 1A Risk Factors {_TEXTO} Item 1B Comments</body></html>"
+def _filing_html() -> str:
+    return f"<html><body>Item 1A Risk Factors {_TEXT} Item 1B Comments</body></html>"
 
 
 @pytest.fixture(autouse=True)
-def chave_no_ambiente(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENTE_FILINGS_SEC_ANTHROPIC_API_KEY", "chave-de-teste")
+def key_in_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SEC_FILINGS_AGENT_ANTHROPIC_API_KEY", "test-key")
 
 
-def test_sem_chave_orienta_e_sai_com_codigo_dois(
+def test_missing_key_guides_and_exits_with_code_two(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("AGENTE_FILINGS_SEC_ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("SEC_FILINGS_AGENT_ANTHROPIC_API_KEY", raising=False)
 
     assert (
         main(
             [
-                "comparar",
+                "compare",
                 "--ticker",
                 "AAPL",
-                "--ano-antigo",
+                "--old-year",
                 "2023",
-                "--ano-novo",
+                "--new-year",
                 "2024",
             ]
         )
@@ -52,63 +52,61 @@ def test_sem_chave_orienta_e_sai_com_codigo_dois(
     )
 
 
-def test_comparar_imprime_as_mudancas(
+def test_compare_prints_the_changes(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    mapa_tickers = {"0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc."}}
-    submissoes = {
+    ticker_map = {"0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc."}}
+    submissions = {
         "filings": {
             "recent": {
                 "form": ["10-K", "10-K"],
                 "filingDate": ["2024-11-01", "2023-11-03"],
-                "accessionNumber": [_ACCESSION_NOVO, _ACCESSION_ANTIGO],
-                "primaryDocument": ["novo.htm", "antigo.htm"],
+                "accessionNumber": [_ACCESSION_NEW, _ACCESSION_OLD],
+                "primaryDocument": ["new.htm", "old.htm"],
             }
         }
     }
-    respostas = {
-        _MAPA_TICKERS_URL: httpx.Response(
-            200, content=json.dumps(mapa_tickers).encode()
-        ),
-        _SUBMISSOES_URL: httpx.Response(200, content=json.dumps(submissoes).encode()),
-        _DOC_ANTIGO_URL: httpx.Response(200, text=_html_filing()),
-        _DOC_NOVO_URL: httpx.Response(200, text=_html_filing()),
+    responses = {
+        _TICKER_MAP_URL: httpx.Response(200, content=json.dumps(ticker_map).encode()),
+        _SUBMISSIONS_URL: httpx.Response(200, content=json.dumps(submissions).encode()),
+        _DOC_OLD_URL: httpx.Response(200, text=_filing_html()),
+        _DOC_NEW_URL: httpx.Response(200, text=_filing_html()),
     }
 
-    def responder(requisicao: httpx.Request) -> httpx.Response:
-        return respostas[str(requisicao.url)]
+    def respond(request: httpx.Request) -> httpx.Response:
+        return responses[str(request.url)]
 
-    # Captura a classe real antes de remendar o atributo no módulo httpx —
-    # senão o lambda abaixo chamaria a si mesmo (o patch atinge o módulo
-    # inteiro, não só o uso dentro de cli.py).
-    cliente_real = httpx.Client
+    # Capture the real class before patching the attribute on the httpx
+    # module — otherwise the lambda below would call itself (the patch hits
+    # the whole module, not just the usage inside cli.py).
+    real_client = httpx.Client
     monkeypatch.setattr(
-        "agente_filings_sec.cli.httpx.Client",
-        lambda **_: cliente_real(transport=httpx.MockTransport(responder)),
+        "sec_filings_agent.cli.httpx.Client",
+        lambda **_: real_client(transport=httpx.MockTransport(respond)),
     )
 
-    class _ClienteLLMFalso:
-        def comparar(
-            self, *, texto_antigo: str, texto_novo: str, feedback: list[str]
-        ) -> list[MudancaBruta]:
+    class _FakeLLMClient:
+        def compare(
+            self, *, old_text: str, new_text: str, feedback: list[str]
+        ) -> list[RawChange]:
             return [
-                MudancaBruta(
-                    tipo="novo",
-                    resumo="risco de mercado citado",
-                    citacao="Risco de mercado pode afetar nossos resultados",
-                    filing="novo",
+                RawChange(
+                    type="added",
+                    summary="market risk mentioned",
+                    citation="Market risk may affect our results",
+                    filing="new",
                 )
             ]
 
     monkeypatch.setattr(
-        "agente_filings_sec.cli.construir_cliente", lambda **_: _ClienteLLMFalso()
+        "sec_filings_agent.cli.build_client", lambda **_: _FakeLLMClient()
     )
 
-    codigo = main(
-        ["comparar", "--ticker", "AAPL", "--ano-antigo", "2023", "--ano-novo", "2024"]
+    code = main(
+        ["compare", "--ticker", "AAPL", "--old-year", "2023", "--new-year", "2024"]
     )
 
-    saida = capsys.readouterr().out
-    assert codigo == 0
-    assert "tipo,filing,resumo,citacao" in saida
-    assert "risco de mercado citado" in saida
+    output = capsys.readouterr().out
+    assert code == 0
+    assert "type,filing,summary,citation" in output
+    assert "market risk mentioned" in output

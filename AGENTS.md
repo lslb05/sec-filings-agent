@@ -9,7 +9,7 @@ architecture decisions by guessing.
 ## Stack and layout
 
 - Python 3.12 managed with `uv`.
-- Production code lives in `src/agente_filings_sec`.
+- Production code lives in `src/sec_filings_agent`.
 - Tests live in `tests`; notebooks may import production code, never the reverse.
 - Use Ruff, strict mypy, pytest, Pydantic and Polars.
 - Configuration comes from environment variables. Never commit secrets.

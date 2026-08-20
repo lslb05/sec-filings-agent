@@ -1,15 +1,14 @@
-## Resultado
+## Result
 
-Descreva o comportamento entregue e por que ele é necessário.
+Describe the delivered behavior and why it's needed.
 
-## Verificação
+## Verification
 
-- [ ] `uv run python scripts/check.py` passa localmente
-- [ ] comportamento novo ou alterado tem teste
-- [ ] README e `.env.example` refletem a mudança
-- [ ] diff não contém segredo, dado privado ou caminho pessoal
+- [ ] `uv run python scripts/check.py` passes locally
+- [ ] new or changed behavior has a test
+- [ ] README and `.env.example` reflect the change
+- [ ] diff contains no secret, private data, or personal path
 
-## Riscos e fora de escopo
+## Risks and out of scope
 
-Liste risco residual, migração, impacto operacional e o que ficou para depois.
-
+List residual risk, migration, operational impact, and what was left for later.

@@ -1,8 +1,8 @@
-"""Portao de qualidade: formato, lint, tipos e teste.
+"""Quality gate: format, lint, types and tests.
 
-Executa as etapas em ordem, para na primeira que falhar e propaga o codigo
-de saida. Usa apenas a biblioteca padrao para rodar igual em Windows, Linux
-e no CI.
+Runs the steps in order, stops on the first failure and propagates its exit
+code. Uses only the standard library so it runs the same on Windows, Linux
+and CI.
 
     uv run python scripts/check.py
 """
@@ -17,10 +17,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 STEPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("formato", ("ruff", "format", "--check", ".")),
+    ("format", ("ruff", "format", "--check", ".")),
     ("lint", ("ruff", "check", ".")),
-    ("tipos", ("mypy", "src", "tests")),
-    ("teste", ("pytest",)),
+    ("types", ("mypy", "src", "tests")),
+    ("test", ("pytest",)),
 )
 
 
@@ -28,8 +28,8 @@ def main() -> int:
     missing = sorted({cmd[0] for _, cmd in STEPS if shutil.which(cmd[0]) is None})
     if missing:
         print(
-            f"erro: {', '.join(missing)} nao encontrado no PATH.\n"
-            "Rode 'uv sync' e chame este script com 'uv run python scripts/check.py'.",
+            f"error: {', '.join(missing)} not found on PATH.\n"
+            "Run 'uv sync' and call this script with 'uv run python scripts/check.py'.",
             file=sys.stderr,
         )
         return 127
@@ -38,10 +38,10 @@ def main() -> int:
         print(f"==> {name}: {' '.join(cmd)}", flush=True)
         code = subprocess.run(cmd, cwd=ROOT).returncode
         if code != 0:
-            print(f"erro: etapa '{name}' falhou com codigo {code}", file=sys.stderr)
+            print(f"error: step '{name}' failed with code {code}", file=sys.stderr)
             return code
 
-    print("==> ok: formato, lint, tipos e teste passaram")
+    print("==> ok: format, lint, types and test all passed")
     return 0
 
 

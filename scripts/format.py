@@ -1,4 +1,4 @@
-"""Formata e aplica correcoes automaticas de lint.
+"""Formats and applies automatic lint fixes.
 
 uv run python scripts/format.py
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 STEPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("formato", ("ruff", "format", ".")),
+    ("format", ("ruff", "format", ".")),
     ("lint --fix", ("ruff", "check", "--fix", ".")),
 )
 
@@ -21,8 +21,9 @@ STEPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 def main() -> int:
     if shutil.which("ruff") is None:
         print(
-            "erro: ruff nao encontrado no PATH.\n"
-            "Rode 'uv sync' e chame este script com 'uv run python scripts/format.py'.",
+            "error: ruff not found on PATH.\n"
+            "Run 'uv sync' and call this script with "
+            "'uv run python scripts/format.py'.",
             file=sys.stderr,
         )
         return 127
@@ -31,7 +32,7 @@ def main() -> int:
         print(f"==> {name}: {' '.join(cmd)}", flush=True)
         code = subprocess.run(cmd, cwd=ROOT).returncode
         if code != 0:
-            print(f"erro: etapa '{name}' falhou com codigo {code}", file=sys.stderr)
+            print(f"error: step '{name}' failed with code {code}", file=sys.stderr)
             return code
 
     return 0

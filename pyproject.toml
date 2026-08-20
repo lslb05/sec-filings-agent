@@ -1,5 +1,5 @@
 [project]
-name = "agente-filings-sec"
+name = "sec-filings-agent"
 version = "0.1.0"
 description = "Replace with a one-line project description."
 readme = "README.md"
@@ -29,7 +29,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agente_filings_sec"]
+packages = ["src/sec_filings_agent"]
 
 [tool.ruff]
 target-version = "py312"
@@ -45,6 +45,6 @@ strict = true
 files = ["src", "tests"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=agente_filings_sec --cov-report=term-missing --cov-fail-under=70"
+addopts = "--cov=sec_filings_agent --cov-report=term-missing --cov-fail-under=70"
 testpaths = ["tests"]
 
