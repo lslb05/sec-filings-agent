@@ -9,7 +9,7 @@ from agente_filings_sec.config import Settings
 from agente_filings_sec.extrator import SecaoNaoEncontrada
 from agente_filings_sec.fontes.edgar import FilingNaoEncontrado
 from agente_filings_sec.grafo import construir_grafo, estado_inicial
-from agente_filings_sec.llm import ClienteAnthropic
+from agente_filings_sec.llm import construir_cliente
 
 
 def _argumentos(argv: list[str] | None) -> argparse.Namespace:
@@ -30,14 +30,20 @@ def main(argv: list[str] | None = None) -> int:
     argumentos = _argumentos(argv)
     config = Settings()
 
-    if not config.anthropic_api_key:
+    try:
+        cliente_llm = construir_cliente(
+            provedor=config.provedor_llm,
+            anthropic_api_key=config.anthropic_api_key,
+            anthropic_modelo=config.anthropic_modelo,
+            openai_api_key=config.openai_api_key,
+            openai_modelo=config.openai_modelo,
+        )
+    except ValueError as erro:
         print(
-            "defina AGENTE_FILINGS_SEC_ANTHROPIC_API_KEY (chave da Anthropic)",
+            f"{erro} (AGENTE_FILINGS_SEC_PROVEDOR_LLM={config.provedor_llm})",
             file=sys.stderr,
         )
         return 2
-
-    cliente_llm = ClienteAnthropic(chave_api=config.anthropic_api_key)
 
     with httpx.Client(headers={"User-Agent": config.edgar_user_agent}) as cliente_http:
         grafo = construir_grafo(cliente_llm=cliente_llm, cliente_http=cliente_http)

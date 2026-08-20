@@ -101,7 +101,7 @@ def test_comparar_imprime_as_mudancas(
             ]
 
     monkeypatch.setattr(
-        "agente_filings_sec.cli.ClienteAnthropic", lambda **_: _ClienteLLMFalso()
+        "agente_filings_sec.cli.construir_cliente", lambda **_: _ClienteLLMFalso()
     )
 
     codigo = main(

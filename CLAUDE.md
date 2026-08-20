@@ -67,11 +67,20 @@ altere `user.name` nem `user.email`.
   deterministicamente, repete com feedback se alguma citação falhar, até 3
   tentativas). Extração do Item 1A validada contra 10-K real de AAPL, MSFT e
   TSLA depois de três correções (ver `docs/decisions.md`).
-- **Pendente:** nunca rodou contra a API da Anthropic de verdade — sem
-  `ANTHROPIC_API_KEY` neste ambiente. O nó `comparar` e o loop de
-  re-tentativa só têm cobertura com LLM falso determinístico.
-- **Próximo passo:** com uma chave da Anthropic, rodar `comparar` de
-  verdade contra um par de 10-Ks reais e conferir se as citações que o
-  modelo produz passam na verificação na primeira tentativa ou se o loop de
-  correção é realmente necessário na prática.
+- **Decidido:** `ClienteLLM` é um `Protocol` de um método; `ClienteAnthropic`
+  e `ClienteOpenAI` (`src/agente_filings_sec/llm.py`) implementam o mesmo
+  contrato contra tool-calling da Anthropic e function-calling da OpenAI.
+  `construir_cliente()` escolhe qual instanciar a partir de
+  `AGENTE_FILINGS_SEC_PROVEDOR_LLM` (`anthropic` padrão, ou `openai`) — só a
+  chave do provedor escolhido precisa estar definida. `grafo.py` e `cli.py`
+  não conhecem qual concreto está por trás do `Protocol`.
+- **Pendente:** nunca rodou contra a API da Anthropic nem da OpenAI de
+  verdade — sem `ANTHROPIC_API_KEY` nem `OPENAI_API_KEY` neste ambiente. O
+  nó `comparar` e o loop de re-tentativa só têm cobertura com LLM falso
+  determinístico, para os dois provedores.
+- **Próximo passo:** com uma chave real (de qualquer um dos dois
+  provedores), rodar `comparar` de verdade contra um par de 10-Ks reais e
+  conferir se as citações que o modelo produz passam na verificação na
+  primeira tentativa ou se o loop de correção é realmente necessário na
+  prática.
 

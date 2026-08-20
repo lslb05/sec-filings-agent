@@ -22,12 +22,12 @@ tipo,filing,resumo,citacao
 ...
 ```
 
-Não rodei esse comando de ponta a ponta com uma chave da Anthropic de
-verdade — este ambiente de desenvolvimento não tem `ANTHROPIC_API_KEY` (ver
-Limitações). O que **foi** validado com dado real: busca no EDGAR e extração
-do Item 1A contra 10-Ks de verdade da Apple, Microsoft e Tesla — as três
-formatações diferentes de HTML quebraram a heurística de extração em algum
-momento do desenvolvimento, e as correções ficaram documentadas em
+Não rodei esse comando de ponta a ponta com uma chave de verdade — este
+ambiente de desenvolvimento não tem `ANTHROPIC_API_KEY` nem `OPENAI_API_KEY`
+(ver Limitações). O que **foi** validado com dado real: busca no EDGAR e
+extração do Item 1A contra 10-Ks de verdade da Apple, Microsoft e Tesla — as
+três formatações diferentes de HTML quebraram a heurística de extração em
+algum momento do desenvolvimento, e as correções ficaram documentadas em
 `docs/decisions.md` porque valem a pena entender, não só corrigir.
 
 ## Problema e escopo
@@ -68,11 +68,18 @@ momento do desenvolvimento, e as correções ficaram documentadas em
 
 Três decisões que valem explicação:
 
-**Tool-calling em vez de JSON em texto livre.** A Anthropic API valida a
-forma da resposta contra um schema antes de devolver — não sobra "o modelo
-esqueceu uma vírgula" pra tratar aqui. O conteúdo ainda é revalidado por
-Pydantic, porque vir estruturado da API não dispensa validar numa fronteira
-externa.
+**Tool-calling em vez de JSON em texto livre.** Tanto a Anthropic quanto a
+OpenAI validam a forma da resposta contra um schema antes de devolver — não
+sobra "o modelo esqueceu uma vírgula" pra tratar aqui. O conteúdo ainda é
+revalidado por Pydantic, porque vir estruturado da API não dispensa validar
+numa fronteira externa.
+
+**Provedor de LLM é escolha de configuração, não de código.** `ClienteLLM` é
+um `Protocol` com um único método (`comparar`); `ClienteAnthropic` e
+`ClienteOpenAI` implementam o mesmo contrato contra APIs de tool-calling
+diferentes, e `construir_cliente()` escolhe qual instanciar a partir de
+`AGENTE_FILINGS_SEC_PROVEDOR_LLM`. `grafo.py` e `cli.py` só conhecem o
+`Protocol` — trocar de provedor não muda uma linha deles.
 
 **A aresta condicional é o que separa isto de uma função com um `if`.**
 `verificar_citacoes` não chama o LLM — é substring determinística. Se uma
@@ -87,17 +94,19 @@ de rodapé: é o risco técnico real deste projeto, mais do que o LLM em si.
 
 ## Executar localmente
 
-Requisitos: Python 3.12, `uv`, e uma chave da Anthropic.
+Requisitos: Python 3.12, `uv`, e uma chave da Anthropic **ou** da OpenAI.
 
 ```bash
 uv sync
-cp .env.example .env      # preencha AGENTE_FILINGS_SEC_ANTHROPIC_API_KEY
+cp .env.example .env      # preencha a chave do provedor escolhido
 uv run python -m agente_filings_sec comparar --ticker AAPL --ano-antigo 2023 --ano-novo 2024
 ```
 
-Sem a chave, o comando orienta e sai com código 2. Se o filing não for
-encontrado ou a extração do Item 1A falhar, sai com código 2 também, com a
-mensagem específica — nunca inventa resposta.
+`AGENTE_FILINGS_SEC_PROVEDOR_LLM` escolhe o provedor (`anthropic`, padrão, ou
+`openai`) — só a chave desse provedor precisa estar preenchida no `.env`.
+Sem ela, o comando orienta e sai com código 2. Se o filing não for encontrado
+ou a extração do Item 1A falhar, sai com código 2 também, com a mensagem
+específica — nunca inventa resposta.
 
 ## Qualidade
 
@@ -106,8 +115,8 @@ uv run python scripts/check.py
 ```
 
 O check executa formatação, lint, tipos e testes com cobertura. Nenhum teste
-chama a API da Anthropic nem a SEC de verdade — o cliente LLM e o cliente
-HTTP são injetados, e os testes usam versões falsas/mockadas.
+chama a API da Anthropic, da OpenAI nem a SEC de verdade — o cliente LLM e o
+cliente HTTP são injetados, e os testes usam versões falsas/mockadas.
 
 ## Estrutura
 
@@ -116,18 +125,18 @@ src/agente_filings_sec/
     fontes/edgar.py    ticker→CIK, lista de filings, download — sem credencial
     extrator.py         heurística de extração do Item 1A (o risco técnico real)
     citacoes.py          verificação determinística de citação
-    llm.py                cliente Anthropic via tool-calling, interface injetável
+    llm.py                clientes Anthropic e OpenAI via tool-calling, interface injetável
     grafo.py              o grafo LangGraph: busca, compara, verifica, repete
     cli.py                 coordenação
 ```
 
 ## Limitações
 
-- **Nunca validado contra a API da Anthropic de verdade.** Este ambiente de
-  desenvolvimento não tem `ANTHROPIC_API_KEY`. `fontes/edgar.py` e
-  `extrator.py` foram validados contra filings reais (AAPL, MSFT, TSLA); o
-  nó `comparar` e o loop de re-tentativa só foram testados com um LLM falso
-  determinístico.
+- **Nunca validado contra a API da Anthropic nem da OpenAI de verdade.**
+  Este ambiente de desenvolvimento não tem `ANTHROPIC_API_KEY` nem
+  `OPENAI_API_KEY`. `fontes/edgar.py` e `extrator.py` foram validados contra
+  filings reais (AAPL, MSFT, TSLA); o nó `comparar` e o loop de re-tentativa
+  só foram testados com um LLM falso determinístico.
 - A heurística de extração do Item 1A foi corrigida duas vezes durante o
   desenvolvimento contra três formatos reais diferentes — não há garantia de
   que generaliza para todo filer. Um 10-K com formatação atípica pode
